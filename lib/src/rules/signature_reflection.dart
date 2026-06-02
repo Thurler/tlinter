@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:math';
 
 import 'package:analyzer/analysis_rule/analysis_rule.dart';
@@ -12,13 +11,6 @@ import 'package:analyzer/dart/element/type.dart';
 import 'package:analyzer/dart/element/type_system.dart';
 import 'package:analyzer/error/error.dart';
 import 'package:tlinter/src/annotations/reflect.dart';
-
-void write(dynamic message) {
-  File('/tmp/plugin.txt').writeAsStringSync(
-    '$message\n',
-    mode: FileMode.append,
-  );
-}
 
 /// A rule that checks whether functions and methods annotated with [TReflect]
 /// actually reflect the signature they are pointing to
@@ -136,10 +128,6 @@ class _Visitor extends SimpleAstVisitor<void> {
         ).nonNulls.toSet() ?? const <String>{};
       }
     }
-    write('=========');
-    write(target);
-    write(expected);
-    write(typeSystem.isSubtypeOf(target, expected));
     // Otherwise, we start checking individual attributes
     // Return type must always be a subtype of the expected one - we can always
     // narrow the return type, never generalize it
@@ -352,13 +340,6 @@ class _Visitor extends SimpleAstVisitor<void> {
   }
 
   bool _checkSubtype(DartType target, DartType expected) {
-    write('===');
-    write(target);
-    write(expected);
-    write(typeSystem.isSubtypeOf(target, expected));
-    write(_resolveType(target));
-    write(_resolveType(expected));
-    write(typeSystem.isSubtypeOf(_resolveType(target), _resolveType(expected)));
     // If both types are a type parameter, compare their bounds instead
     if (target is TypeParameterType && expected is TypeParameterType) {
       // If non-nullability checks fail, abort
