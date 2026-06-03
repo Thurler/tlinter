@@ -273,7 +273,7 @@ class _Visitor extends SimpleAstVisitor<void> {
     if (!_checkSubtype(target.returnType, expected.returnType)) {
       return false;
     }
-    // Every type argument must match / be a subtype
+    // Every type argument must match exactly
     if (target.typeParameters.length != expected.typeParameters.length) {
       return false;
     }
@@ -288,28 +288,28 @@ class _Visitor extends SimpleAstVisitor<void> {
       if (targetBound == null || expectedBound == null) {
         return false;
       }
-      // Both have bounds - validate equality
-      if (!_checkSubtype(targetBound, expectedBound)) {
+      // Both have bounds - validate strict equality
+      if (!_checkSameType(targetBound, expectedBound)) {
         return false;
       }
     }
-    // Every positional argument must match / be a subtype
+    // Every positional argument must match / be a supertype
     bool normalParametersOk = _checkSubtypeList(
-      target.normalParameterTypes,
       expected.normalParameterTypes,
+      target.normalParameterTypes,
     );
     if (!normalParametersOk) {
       return false;
     }
-    // Every optional argument must match / be a subtype
+    // Every optional argument must match / be a supertype
     bool optionalParametersOk = _checkSubtypeList(
-      target.optionalParameterTypes,
       expected.optionalParameterTypes,
+      target.optionalParameterTypes,
     );
     if (!optionalParametersOk) {
       return false;
     }
-    // Every named argument must match / be a subtype, without extras
+    // Every named argument must match / be a supertype, without extras
     if (
       target.namedParameterTypes.keys.length !=
       expected.namedParameterTypes.keys.length
@@ -320,6 +320,65 @@ class _Visitor extends SimpleAstVisitor<void> {
       (String name) {
         return expected.namedParameterTypes.containsKey(name) &&
             _checkSubtype(
+          expected.namedParameterTypes[name]!,
+          target.namedParameterTypes[name]!,
+        );
+      },
+    );
+  }
+
+  bool _checkSameFunctionType(FunctionType target, FunctionType expected) {
+    // Return type must match
+    if (!_checkSameType(target.returnType, expected.returnType)) {
+      return false;
+    }
+    // Every type argument must match exactly
+    if (target.typeParameters.length != expected.typeParameters.length) {
+      return false;
+    }
+    for (int i = 0; i < target.typeParameters.length; i++) {
+      DartType? targetBound = target.typeParameters[i].bound;
+      DartType? expectedBound = expected.typeParameters[i].bound;
+      // Both have no bounds - valid
+      if (targetBound == null && expectedBound == null) {
+        continue;
+      }
+      // Either has no bounds, but not the other - invalid
+      if (targetBound == null || expectedBound == null) {
+        return false;
+      }
+      // Both have bounds - validate strict equality
+      if (!_checkSameType(targetBound, expectedBound)) {
+        return false;
+      }
+    }
+    // Every positional argument must match
+    bool normalParametersOk = _checkSameTypeList(
+      target.normalParameterTypes,
+      expected.normalParameterTypes,
+    );
+    if (!normalParametersOk) {
+      return false;
+    }
+    // Every optional argument must match / be a supertype
+    bool optionalParametersOk = _checkSameTypeList(
+      target.optionalParameterTypes,
+      expected.optionalParameterTypes,
+    );
+    if (!optionalParametersOk) {
+      return false;
+    }
+    // Every named argument must match / be a supertype, without extras
+    if (
+      target.namedParameterTypes.keys.length !=
+      expected.namedParameterTypes.keys.length
+    ) {
+      return false;
+    }
+    return target.namedParameterTypes.keys.every(
+      (String name) {
+        return expected.namedParameterTypes.containsKey(name) &&
+            _checkSameType(
           target.namedParameterTypes[name]!,
           expected.namedParameterTypes[name]!,
         );
@@ -333,6 +392,18 @@ class _Visitor extends SimpleAstVisitor<void> {
     }
     for (int i = 0; i < target.length; i++) {
       if (!_checkSubtype(target[i], expected[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _checkSameTypeList(List<DartType> target, List<DartType> expected) {
+    if (target.length != expected.length) {
+      return false;
+    }
+    for (int i = 0; i < target.length; i++) {
+      if (!_checkSameType(target[i], expected[i])) {
         return false;
       }
     }
@@ -378,6 +449,47 @@ class _Visitor extends SimpleAstVisitor<void> {
     // And finally, we resolve all types to their bounds and compare them - any
     // generics will have already been checked above
     return typeSystem.isSubtypeOf(_resolveType(target), _resolveType(expected));
+  }
+
+  bool _checkSameType(DartType target, DartType expected) {
+    // If both types are a type parameter, compare their bounds instead
+    if (target is TypeParameterType && expected is TypeParameterType) {
+      // If non-nullability checks fail, abort
+      if (!_checkNonNullableCompatibility(target, expected)) {
+        return false;
+      }
+      return _checkSameType(target.bound, expected.bound);
+    }
+    // If both types are a function type, we must validate things individually,
+    // as typed parameters don't propagate to function parameters
+    if (target is FunctionType && expected is FunctionType) {
+      // If non-nullability checks fail, abort
+      if (!_checkNonNullableCompatibility(target, expected)) {
+        return false;
+      }
+      return _checkSameFunctionType(target, expected);
+    }
+    // If both types are parameterized, we must recursively validate each one of
+    // the parameter types
+    if (target is InterfaceType && expected is InterfaceType) {
+      // Obviously must have the same number of type arguments
+      if (target.typeArguments.length != expected.typeArguments.length) {
+        return false;
+      }
+      bool allTypesMatch = Iterable<int>.generate(
+        target.typeArguments.length,
+        (int i) => i,
+      ).every(
+        (int i) =>
+            _checkSameType(target.typeArguments[i], expected.typeArguments[i]),
+      );
+      if (!allTypesMatch) {
+        return false;
+      }
+    }
+    // And finally, we check raw equality - this is achieved by making sure both
+    // are subtypes of the other, since if A <= B and B <= A, then A == B
+    return _checkSubtype(target, expected) && _checkSubtype(expected, target);
   }
 
   bool _checkNonNullableCompatibility(DartType target, DartType expected) {
