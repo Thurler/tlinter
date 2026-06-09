@@ -321,7 +321,16 @@ void bar10({int? a, double? b}) {}
 
 //////////////
 /// Example 11 - All rules described above are applied to function parameters or
-/// function returns, except that no extra optional/named arguments are allowed
+/// function returns. Some additional restrictions are imposed, however,
+/// depending on which part of the function has a function parameter:
+/// - For every type, the signature shape must match, meaning no extra optional
+///   or named arguments are allowed
+/// - Return types follow the same rules described by the examples above
+/// - Template types must match exactly
+/// - Positional, optional and named arguments must be a supertype instead of
+///   subtypes, as the type expectation is reversed for function arguments
+///   (you can pass a function that accepts num where int was expected, but not
+///   one that accepts int where num was expected)
 //////////////
 
 void Function()? foo11a() => null;
@@ -338,58 +347,16 @@ void Function([num?])? foo11k() => null;
 void Function([int?])? foo11l() => null;
 void Function({num? a})? foo11m() => null;
 void Function({int? a})? foo11n() => null;
-void foo11o<T extends void Function(num)>() {}
-void foo11p<T extends void Function(int)>() {}
+void foo11o<U extends num, T extends void Function<R extends num>(U)>() {}
+void foo11p<U extends int, T extends void Function<R extends int>(U)>() {}
 void foo11q<S extends num, T extends void Function(S)>() {}
 void foo11r<S extends int, T extends void Function(S)>() {}
-void foo11s(void Function(num) a) {}
-void foo11t(void Function(int) a) {}
-void foo11u([void Function(num)? a]) {}
-void foo11v([void Function(int)? a]) {}
-void foo11w({void Function(num)? a}) {}
-void foo11x({void Function(int)? a}) {}
-
-// These should all work - they are always further specifying a type in the
-// function
-
-@TReflect(foo11b)
-int Function()? bar11b() => null;
-
-@TReflect(foo11d)
-Iterable<int> Function()? bar11d0() => null;
-
-@TReflect(foo11d)
-List<num> Function()? bar11d1() => null;
-
-@TReflect(foo11d)
-List<int> Function()? bar11d2() => null;
-
-@TReflect(foo11f)
-void Function<T>()? bar11f() => null;
-
-@TReflect(foo11g)
-void Function<T extends int>()? bar11g() => null;
-
-@TReflect(foo11i)
-void Function(int)? bar11i() => null;
-
-@TReflect(foo11k)
-void Function([int?])? bar11k() => null;
-
-@TReflect(foo11m)
-void Function({int? a})? bar11m() => null;
-
-@TReflect(foo11o)
-void bar11o<T extends void Function(int)>() {}
-
-@TReflect(foo11q)
-void bar11q<S extends int, T extends void Function(S)>() {}
-
-@TReflect(foo11s)
-void bar11s(void Function(int) a) {}
-
-@TReflect(foo11w)
-void bar11w({void Function(int)? a}) {}
+void foo11s(num Function() a) {}
+void foo11t(int Function() a) {}
+void foo11u([num Function()? a]) {}
+void foo11v([int Function()? a]) {}
+void foo11w({num Function()? a}) {}
+void foo11x({int Function()? a}) {}
 
 // These should not work - they are changing part of the function signature
 
@@ -432,7 +399,22 @@ void Function({String? a})? bar11m0() => null;
 @TReflect(foo11m)
 void Function({num? a, String? b})? bar11m1() => null;
 
-// These should not work - they are generalizing a type in the function
+// These should all work - they are always further specifying a type in the
+// function return
+
+@TReflect(foo11b)
+int Function()? bar11b() => null;
+
+@TReflect(foo11d)
+Iterable<int> Function()? bar11d0() => null;
+
+@TReflect(foo11d)
+List<num> Function()? bar11d1() => null;
+
+@TReflect(foo11d)
+List<int> Function()? bar11d2() => null;
+
+// These should not work - they are generalizing a type in the function return
 
 @TReflect(foo11c)
 num Function()? bar11c() => null;
@@ -440,8 +422,23 @@ num Function()? bar11c() => null;
 @TReflect(foo11e)
 List<num> Function()? bar11e() => null;
 
+// These should all work - they are preserving the templated type
+
+@TReflect(foo11f)
+void Function<T>()? bar11f() => null;
+
+@TReflect(foo11g)
+void Function<T extends num>()? bar11g0() => null;
+
+// These should not work - they are changing the templated type
+
+@TReflect(foo11g)
+void Function<T extends int>()? bar11g1() => null;
+
 @TReflect(foo11h)
 void Function<T extends num>()? bar11h() => null;
+
+// These should all work - they are generalizing a type in the function argument
 
 @TReflect(foo11j)
 void Function(num)? bar11j() => null;
@@ -452,17 +449,66 @@ void Function([num?])? bar11l() => null;
 @TReflect(foo11n)
 void Function({num? a})? bar11n() => null;
 
+// These should not work - they are specializing a type in the function argument
+
+@TReflect(foo11i)
+void Function(int)? bar11i() => null;
+
+@TReflect(foo11k)
+void Function([int?])? bar11k() => null;
+
+@TReflect(foo11m)
+void Function({int? a})? bar11m() => null;
+
+// These should all work - they are preserving the templated type by keeping the
+// arguments the same
+
+@TReflect(foo11o)
+void bar11o0<U extends num, T extends void Function<R extends num>(U)>() {}
+
 @TReflect(foo11p)
-void bar11p<T extends void Function(num)>() {}
+void bar11p0<U extends int, T extends void Function<R extends int>(U)>() {}
+
+@TReflect(foo11q)
+void bar11q0<S extends num, T extends void Function(S)>() {}
+
+// These should not work - they are breaking the templated type by either
+// generalizing or specializing the arguments. The template rule superimposes
+// itself over the argument specialization one
+
+@TReflect(foo11o)
+void bar11o1<U extends int, T extends void Function<R extends num>(U)>() {}
+
+@TReflect(foo11o)
+void bar11o2<U extends num, T extends void Function<R extends int>(U)>() {}
+
+@TReflect(foo11p)
+void bar11p1<U extends int, T extends void Function<R extends num>(U)>() {}
+
+@TReflect(foo11q)
+void bar11q1<S extends int, T extends void Function(S)>() {}
 
 @TReflect(foo11r)
 void bar11r<S extends num, T extends void Function(S)>() {}
 
+// These should all work - they just apply previous examples to arguments
+
+@TReflect(foo11s)
+void bar11s(int Function() a) {}
+
+@TReflect(foo11u)
+void bar11u([int Function()? a]) {}
+
+@TReflect(foo11w)
+void bar11w({int Function()? a}) {}
+
+// These should not work - for the same reason as previous examples
+
 @TReflect(foo11t)
-void bar11t(void Function(num) a) {}
+void bar11t(num Function() a) {}
 
 @TReflect(foo11v)
-void bar11v([void Function(num)? a]) {}
+void bar11v([num Function()? a]) {}
 
 @TReflect(foo11x)
-void bar11x({void Function(num)? a}) {}
+void bar11x({num Function()? a}) {}

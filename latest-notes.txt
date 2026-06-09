@@ -1,4 +1,4 @@
 Release Notes
 =============
 
-- Initial release with TReflect annotation rule to enforce function reflection
+- Fixed an issue with recursive function types in reflection
