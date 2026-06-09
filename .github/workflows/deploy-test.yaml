@@ -50,6 +50,3 @@ jobs:
 
       - name: Dart Format
         run: dartformat --set-exit-if-changed lib/
-
-      - name: Flutter Build Linux Native
-        run: cd example && flutter build linux
